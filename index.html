@@ -256,6 +256,7 @@ document.getElementById('fileInput').addEventListener('change',function(e){
       document.getElementById('msg').style.display='none';
       if(parsedWeeks&&parsedWeeks.length){
         render();
+        saveData();
       }
     }catch(err){
       alert('파일 읽기 오류: '+err.message);
@@ -547,6 +548,7 @@ function fmtMenu(raw,showA,showN){
 
 function resetAll(){
   parsedWeeks=[];
+  EVENTS={};
   document.getElementById('fileInput').value='';
   document.getElementById('preview').style.display='none';
   document.getElementById('msg').style.display='block';
@@ -557,13 +559,45 @@ function resetAll(){
   document.getElementById('mealBody').innerHTML='';
   document.getElementById('extraBody').innerHTML='';
   document.getElementById('extraTable').style.display='none';
+  renderEvtList();
+  localStorage.removeItem('mealV10_data');
 }
+
+// ── 데이터 저장/복원 ──
+function saveData(){
+  try{
+    var data={
+      parsedWeeks:parsedWeeks,
+      EVENTS:EVENTS,
+      yearMonth:document.getElementById('yearMonth').value
+    };
+    localStorage.setItem('mealV10_data',JSON.stringify(data));
+  }catch(e){}
+}
+function restoreData(){
+  try{
+    var raw=localStorage.getItem('mealV10_data');
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    if(data.parsedWeeks&&data.parsedWeeks.length){
+      parsedWeeks=data.parsedWeeks;
+      EVENTS=data.EVENTS||{};
+      document.getElementById('yearMonth').value=data.yearMonth||'';
+      renderEvtList();
+      render();
+      document.getElementById('pdfBtn').disabled=false;
+      document.getElementById('preview').style.display='block';
+      document.getElementById('msg').style.display='none';
+    }
+  }catch(e){}
+}
+restoreData();
 
 ['showAllergy','showNutrition'].forEach(function(id){
   document.getElementById(id).addEventListener('change',function(){if(parsedWeeks.length)render();});
 });
 document.getElementById('yearMonth').addEventListener('input',function(){
-  if(parsedWeeks.length)render();
+  if(parsedWeeks.length){render();saveData();}
 });
 </script>
 </body>
