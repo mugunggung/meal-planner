@@ -251,11 +251,12 @@ document.getElementById('fileInput').addEventListener('change',function(e){
         }
       }
       parsedWeeks=buildCalendar(json);
-      render();
-      // 버튼 활성화
       document.getElementById('pdfBtn').disabled=false;
       document.getElementById('preview').style.display='block';
       document.getElementById('msg').style.display='none';
+      if(parsedWeeks&&parsedWeeks.length){
+        render();
+      }
     }catch(err){
       alert('파일 읽기 오류: '+err.message);
     }
@@ -365,49 +366,65 @@ function render(){
     else break;
   }
 
-  // 뒷칸: 마지막 주에서 날짜 없는 칸 수
+  // 뒷칸: 마지막 주에서 메뉴+이벤트 없는 뒤쪽 칸 수 (날짜가 있어도 메뉴 없으면 포함)
   var WL=parsedWeeks[parsedWeeks.length-1];
   var backSpan=0;
   for(var c=4;c>=0;c--){
-    if(WL.dates[c]===null)backSpan++;
+    var dL=WL.dates[c];
+    if(dL===null){backSpan++;continue;}
+    var hasMenuL=(WL.menus[c]||'').trim()!=='';
+    var hasEvtL=!!EVENTS[dL];
+    if(!hasMenuL&&!hasEvtL){backSpan++;}
     else break;
   }
 
   document.getElementById('debugInfo').textContent='앞칸:'+frontSpan+'개 / 뒷칸:'+backSpan+'개';
 
-  // 배치 결정
+  // ── 원산지/알레르기 배치 결정 (재설계) ──
+  // 우선순위: 큰 칸에 origin, 작은 칸에 allergy. 3칸 이상이면 both.
   var frontType=null,backType=null,extraOrigin=false,extraAllergy=false;
-  if(frontSpan>=3){
+
+  function decideSlot(span){
+    if(span>=3)return 'both';
+    if(span===2)return 'origin';
+    if(span===1)return 'allergy';
+    return null;
+  }
+  var frontDecision=decideSlot(frontSpan);
+  var backDecision=decideSlot(backSpan);
+
+  // 둘 다 있는 경우 충돌 처리
+  if(frontDecision==='both'){
     frontType='both';
-    // both에 원산지+알레르기 모두 포함됐으므로 extra 불필요
-    extraOrigin=false;extraAllergy=false;
-  }else if(frontSpan===2){
+    if(backDecision==='allergy')backType=null; // 이미 both에 포함
+    else if(backDecision==='origin')backType=null;
+  }else if(backDecision==='both'){
+    backType='both';
+  }else if(frontDecision==='origin'&&backDecision==='origin'){
+    // 둘다 2칸: 앞에 origin, 뒤에 allergy
+    frontType='origin';backType='allergy';
+  }else if(frontDecision==='origin'&&backDecision==='allergy'){
+    frontType='origin';backType='allergy';
+  }else if(frontDecision==='allergy'&&backDecision==='origin'){
+    frontType='allergy';backType='origin';
+  }else if(frontDecision==='origin'){
     frontType='origin';
-    if(backSpan>=1){backType='allergy';extraAllergy=false;}
-    else extraAllergy=true;
-    extraOrigin=false;
-  }else if(frontSpan===1){
+    extraAllergy=true; // 뒤에 자리 없음
+  }else if(backDecision==='origin'){
+    backType='origin';
+    extraAllergy=true;
+  }else if(frontDecision==='allergy'&&backDecision==='allergy'){
+    frontType='allergy'; // 한쪽만 사용
+    extraOrigin=true;
+  }else if(frontDecision==='allergy'){
     frontType='allergy';
-    extraOrigin=true;extraAllergy=false;
+    extraOrigin=true;
+  }else if(backDecision==='allergy'){
+    backType='allergy';
+    extraOrigin=true;
   }else{
     extraOrigin=true;extraAllergy=true;
   }
-
-  if(!backType){
-    if(backSpan>=3){backType='both';extraOrigin=false;extraAllergy=false;}
-    else if(backSpan===2){backType='origin';extraOrigin=false;}
-    else if(backSpan===1){
-      if(extraAllergy){backType='allergy';extraAllergy=false;}
-      else if(extraOrigin){backType='origin';extraOrigin=false;}
-    }
-  }
-
-  // 최종 확인: frontType이나 backType에 both가 있으면 extra 모두 false
-  if(frontType==='both'||backType==='both'){extraOrigin=false;extraAllergy=false;}
-  // origin이 배치됐으면 extraOrigin false
-  if(frontType==='origin'||backType==='origin'){extraOrigin=false;}
-  // allergy가 배치됐으면 extraAllergy false
-  if(frontType==='allergy'||backType==='allergy'){extraAllergy=false;}
 
   function getContent(type){
     if(type==='origin')return ORIGIN;
