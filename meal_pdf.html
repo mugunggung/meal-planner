@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>급식 식단표 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nanum+Round+Square&family=Gaegu:wght@700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Nanum Round Square','Apple SD Gothic Neo',sans-serif;background:#f0f4ff;padding:20px;}
+h1{color:#2f9e44;font-size:1.3rem;margin-bottom:4px;text-align:center;}
+.sub{text-align:center;color:#666;font-size:0.82rem;margin-bottom:16px;}
+.card{background:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px;}
+.card-title{font-size:0.88rem;font-weight:700;color:#2f9e44;margin-bottom:10px;}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+label{font-size:0.82rem;color:#444;display:flex;align-items:center;gap:5px;}
+input[type=text],input[type=number],textarea,select{border:1px solid #ccc;border-radius:7px;padding:4px 8px;font-size:0.82rem;font-family:inherit;}
+input[type=text]{width:160px;}input[type=number]{width:70px;}
+textarea{width:100%;min-height:56px;resize:vertical;font-size:0.74rem;line-height:1.6;margin-top:4px;}
+.saved-badge{font-size:0.7rem;color:#2f9e44;background:#f0fdf4;border:1px solid #b2f2bb;border-radius:10px;padding:2px 8px;}
+.upload-area{border:2px dashed #748ffc;border-radius:14px;background:#fff;padding:24px;text-align:center;cursor:pointer;margin-bottom:12px;}
+.upload-area:hover{background:#eef2ff;}
+#fileInput{display:none;}
+button.main{background:#3b5bdb;color:#fff;border:none;border-radius:10px;padding:10px 24px;font-size:0.92rem;font-weight:700;cursor:pointer;}
+button.main:disabled{background:#aaa;cursor:not-allowed;}
+button.sec{background:#fff;color:#3b5bdb;border:2px solid #3b5bdb;border-radius:10px;padding:8px 14px;font-size:0.85rem;font-weight:600;cursor:pointer;}
+button.green{background:#2f9e44;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:0.82rem;cursor:pointer;}
+button.sm-red{background:#fff;color:#e03131;border:1px solid #fcc;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;}
+.btn-row{display:flex;gap:10px;justify-content:center;margin-bottom:12px;}
+#emojiPicker{display:none;position:absolute;top:32px;left:0;background:#fff;border:1px solid #ddd;border-radius:10px;padding:6px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.12);flex-wrap:wrap;gap:4px;width:200px;}
+.evt-tag{background:#f0fdf4;border:1px solid #b2f2bb;border-radius:20px;padding:3px 10px;font-size:0.78rem;display:inline-flex;align-items:center;gap:5px;}
+#debugRaw{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;font-size:0.72rem;color:#555;white-space:pre-wrap;max-height:260px;overflow-y:auto;display:none;}
+#debugInfo{text-align:center;font-size:0.78rem;color:#e03131;margin-bottom:6px;min-height:18px;}
+#preview{background:#fff;border-radius:14px;padding:8px 16px;margin-bottom:12px;display:none;}
+.preview-title{font-family:'Gaegu',cursive;font-size:1.5rem;font-weight:700;color:#2f9e44;text-align:center;margin-bottom:6px;letter-spacing:3px;margin-top:0;padding-top:0;}
+.meal-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:0.7rem;}
+.meal-table th{background:#fff;font-size:0.72rem;padding:3px 2px;text-align:center;border:1px solid #ccd;font-weight:700;font-family:'Gaegu',cursive;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.th-mon{color:#e03131;}.th-tue{color:#f76707;}.th-wed{color:#2f9e44;}.th-thu{color:#1864ab;}.th-fri{color:#7048e8;}
+.th-info{color:#555;font-weight:400;font-size:0.68rem;font-family:'Nanum Round Square',sans-serif;}
+.meal-table td{border:1px solid #ccd;vertical-align:top;padding:4px;line-height:1.5;color:#333;}
+.td-empty{background:#f8f8f8;color:#bbb;text-align:center;vertical-align:middle;}
+.td-info{background:#fafbff;vertical-align:top;padding:5px 7px;font-size:0.63rem;color:#444;line-height:1.75;border:1px solid #ccd;}
+.td-info b{color:#2f4ac7;font-size:0.66rem;}
+.menu-name{display:block;}
+.menu-text{font-size:0.67rem;word-break:keep-all;}
+.allergy-num{color:#bbb;font-size:0.57rem;}
+.nutrition{color:#aaa;font-size:0.58rem;margin-top:2px;border-top:1px dashed #eee;padding-top:2px;}
+.event-card{text-align:center;padding:2px;line-height:1.4;}
+.event-icon{font-size:1rem;display:block;}
+.event-title{font-size:0.65rem;font-weight:700;color:#e03131;display:block;}
+.event-sub{font-size:0.58rem;color:#888;display:block;}
+.msg{text-align:center;color:#999;font-size:0.85rem;padding:20px;}
+
+@media print{
+  @page{
+    margin:5mm;
+  }
+  body > *{display:none!important;}
+  #preview{display:block!important;padding:0;margin:0;background:#fff;}
+  .meal-table{font-size:0.58rem;}
+  .meal-table th{font-size:0.65rem;padding:2px 1px;}
+  .meal-table td{padding:2px 3px;}
+}
+</style>
+</head>
+<body>
+<h1>🍱 월간 급식 식단표 생성기</h1>
+<p class="sub">나이스 엑셀 → 자동 식단표 생성</p>
+
+<div class="card">
+  <div class="card-title">⚙️ 설정</div>
+  <div class="row">
+    <label>년월 <input type="text" id="yearMonth" placeholder="자동입력"></label>
+    <label><input type="checkbox" id="showAllergy" checked> 알레르기 번호</label>
+    <label><input type="checkbox" id="showNutrition" checked> 영양정보</label>
+    <label><input type="checkbox" id="showDebug"> 원본 데이터</label>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">🌿 식재료 원산지 안내</div>
+  <textarea id="originText"></textarea>
+</div>
+
+<div class="card">
+  <div class="card-title">⚠️ 알레르기 정보</div>
+  <textarea id="allergyText" style="min-height:40px"></textarea>
+</div>
+
+<div class="card">
+  <div class="card-title">📅 이벤트 설정</div>
+  <div class="row" style="margin-bottom:8px">
+    <input type="number" id="evtDate" placeholder="날짜" min="1" max="31">
+    <div style="position:relative">
+      <input type="text" id="evtIconSearch" placeholder="이모지 검색" style="width:100px" oninput="searchEmoji(this.value)">
+      <div id="emojiPicker"></div>
+    </div>
+    <input type="text" id="evtIcon" placeholder="🗳️" style="width:44px;text-align:center;font-size:1rem" readonly>
+    <input type="text" id="evtTitle" placeholder="이벤트명" style="width:130px">
+    <select id="evtType" style="border:1px solid #ccc;border-radius:7px;padding:4px 8px;font-size:0.82rem">
+      <option value="noMeal">🚫 급식 없는 날</option>
+      <option value="special">🍽️ 급식 있는 특별한 날</option>
+    </select>
+    <button class="green" onclick="addEvent()">+ 추가</button>
+  </div>
+  <div id="evtList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+</div>
+
+<div class="upload-area" onclick="document.getElementById('fileInput').click()">
+  <div style="font-size:2rem;margin-bottom:6px">📂</div>
+  <p style="color:#555;font-size:0.9rem">나이스 월간식단 엑셀 파일 업로드 (.xlsx/.xls)</p>
+</div>
+<input type="file" id="fileInput" accept=".xlsx,.xls">
+
+<div class="btn-row">
+  <button class="sec" onclick="resetAll()">🗑 초기화</button>
+  <button class="main" id="pdfBtn" onclick="window.print()" disabled>🖨 인쇄/PDF</button>
+</div>
+
+<div id="debugRaw"></div>
+<div id="debugInfo"></div>
+
+<div id="preview">
+  <div class="preview-title" id="prevTitle"></div>
+  <table class="meal-table"><tbody id="mealBody"></tbody></table>
+  <table class="meal-table" id="extraTable" style="display:none;margin-top:2px"><tbody id="extraBody"></tbody></table>
+</div>
+<div id="msg" class="msg">엑셀 파일을 업로드하면 식단표가 여기에 표시됩니다.</div>
+
+<script>
+var DEFAULT_ORIGIN='◇ 식재료 원산지 안내\n쌀(친환경쌀):국내산 / 콩·두부콩:국내산 / 배추김치(고춧가루):국내산 / 돼지고기·닭고기·오리고기/가공품:국내산 / 쇠고기:국내산 한우(암소) / 고등어·오징어·꽃게·참조기·갈치/가공품:국내산 / 아귀/가공품:국내산·중국산 / 낙지·주꾸미/가공품:베트남산 / 명태:러시아산·중국산 / 다랑어:원양산 / 수산물가공품:국내산(오징어채:페루산) / 전복·가리비·방어·우렁쉥이:국산 / 양고기·미꾸라지·뱀장어·넙치·참돔·조피볼락 사용 안함';
+var DEFAULT_ALLERGY='◇ 알레르기 정보\n1.난류 2.우유 3.메밀 4.땅콩 5.대두 6.밀 7.고등어 8.게 9.새우 10.돼지고기 11.복숭아 12.토마토 13.아황산류 14.호두 15.닭고기 16.쇠고기 17.오징어 18.조개류(굴·전복·홍합 포함) 19.잣';
+var parsedWeeks=[], EVENTS={};
+
+function ls(){try{return JSON.parse(localStorage.getItem('mealV10')||'{}');}catch(e){return{};}}
+function lsSet(k,v){var s=ls();s[k]=v;localStorage.setItem('mealV10',JSON.stringify(s));}
+function loadSettings(){
+  var s=ls();
+  document.getElementById('showAllergy').checked=s.showAllergy!==false;
+  document.getElementById('showNutrition').checked=s.showNutrition!==false;
+  document.getElementById('originText').value=DEFAULT_ORIGIN;
+  document.getElementById('allergyText').value=DEFAULT_ALLERGY;
+}
+function saveSettings(){lsSet('schoolName',document.getElementById('schoolName').value);lsSet('showAllergy',document.getElementById('showAllergy').checked);lsSet('showNutrition',document.getElementById('showNutrition').checked);document.getElementById('savedBadge').style.display='inline';alert('저장됐어요!');}
+function saveOrigin(){lsSet('origin',document.getElementById('originText').value);alert('원산지 저장!');if(parsedWeeks.length)render();}
+function saveAllergy(){lsSet('allergy',document.getElementById('allergyText').value);alert('알레르기 저장!');if(parsedWeeks.length)render();}
+function resetOrigin(){document.getElementById('originText').value=DEFAULT_ORIGIN;saveOrigin();}
+loadSettings();
+
+var EMOJI_DB=[
+  {keys:['제헌절','헌법'],emojis:['📜','🏛️','⚖️']},
+  {keys:['선거','투표','지방'],emojis:['🗳️','📋','✅']},
+  {keys:['운동회','체육'],emojis:['🏃','⚽','🏅','🏆']},
+  {keys:['소풍','현장학습','견학'],emojis:['🚌','🎒','🌳','🗺️']},
+  {keys:['방학','휴일','휴가'],emojis:['🏖️','😴','🌞','🎉']},
+  {keys:['명절','추석','설날'],emojis:['🎑','🌕','🥮']},
+  {keys:['개교','개학','입학','졸업'],emojis:['🎓','🏫','📚','🌸']},
+  {keys:['크리스마스','성탄'],emojis:['🎄','🎅','⛄','🎁']},
+  {keys:['어린이날','어린이'],emojis:['🎈','👧','👦']},
+  {keys:['스승의날','선생님'],emojis:['👩‍🏫','💐','🌹']},
+  {keys:['광복절','독립','삼일절'],emojis:['🇰🇷','🕊️','⭐']},
+  {keys:['부처님','석가'],emojis:['🪷','🕯️','🙏']},
+  {keys:['현충일','호국'],emojis:['🕊️','🌹','💙']},
+  {keys:['재량','휴업'],emojis:['🏫','📅','✨']},
+  {keys:['수학여행'],emojis:['🚌','📸','🌏']},
+  {keys:['세계음식','세계','월드푸드'],emojis:['🌍','🌮','🍜','🥘','🍛','🌯','🥗','🍝']},
+];
+function searchEmoji(q){
+  var pk=document.getElementById('emojiPicker');
+  if(!q.trim()){pk.style.display='none';return;}
+  var m=[];
+  EMOJI_DB.forEach(function(e){e.keys.forEach(function(k){if(k.indexOf(q)>=0||q.indexOf(k)>=0)e.emojis.forEach(function(x){if(m.indexOf(x)<0)m.push(x);});});});
+  if(!m.length){pk.style.display='none';return;}
+  pk.innerHTML='';pk.style.display='flex';
+  m.forEach(function(em){
+    var b=document.createElement('span');b.textContent=em;
+    b.style.cssText='font-size:1.4rem;cursor:pointer;padding:4px;border-radius:6px';
+    b.onmouseover=function(){b.style.background='#f0fdf4';};b.onmouseout=function(){b.style.background='';};
+    b.onclick=function(){document.getElementById('evtIcon').value=em;pk.style.display='none';document.getElementById('evtIconSearch').value=em;};
+    pk.appendChild(b);
+  });
+}
+document.addEventListener('click',function(e){if(!e.target.closest('#emojiPicker')&&!e.target.closest('#evtIconSearch'))document.getElementById('emojiPicker').style.display='none';});
+
+function addEvent(){
+  var date=parseInt(document.getElementById('evtDate').value);
+  var icon=document.getElementById('evtIcon').value.trim()||'📢';
+  var title=document.getElementById('evtTitle').value.trim();
+  var type=document.getElementById('evtType').value;
+  if(!date||!title){alert('날짜와 이벤트명 입력!');return;}
+  EVENTS[date]={icon:icon,title:title,type:type};
+  document.getElementById('evtDate').value='';
+  document.getElementById('evtIcon').value='';
+  document.getElementById('evtIconSearch').value='';
+  // 이벤트명 초기화 후 포커스 유지 (한글 입력기 유지)
+  var titleEl=document.getElementById('evtTitle');
+  titleEl.value='';
+  setTimeout(function(){titleEl.focus();},10);
+  renderEvtList();if(parsedWeeks.length)render();
+}
+function editEvent(d){
+  var ev=EVENTS[d];
+  document.getElementById('evtDate').value=d;
+  document.getElementById('evtIcon').value=ev.icon;
+  document.getElementById('evtIconSearch').value=ev.icon;
+  document.getElementById('evtTitle').value=ev.title;
+  document.getElementById('evtType').value=ev.type;
+  delete EVENTS[d];
+  renderEvtList();
+  setTimeout(function(){document.getElementById('evtTitle').focus();},10);
+}
+function removeEvent(d){delete EVENTS[d];renderEvtList();if(parsedWeeks.length)render();}
+function renderEvtList(){
+  var el=document.getElementById('evtList');el.innerHTML='';
+  Object.keys(EVENTS).sort(function(a,b){return a-b;}).forEach(function(d){
+    var ev=EVENTS[d];var tag=document.createElement('div');tag.className='evt-tag';
+    tag.style.cursor='pointer';
+    tag.title='클릭하면 수정';
+    tag.innerHTML=(ev.type==='special'?'🍽️':'🚫')+' '+ev.icon+' <b>'+d+'일</b> '+ev.title+' <button class="sm-red" onclick="event.stopPropagation();removeEvent('+d+')" >×</button>';
+    tag.onclick=function(){editEvent(parseInt(d));};
+    el.appendChild(tag);
+  });
+}
+
+document.getElementById('fileInput').addEventListener('change',function(e){
+  var file=e.target.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var wb=XLSX.read(ev.target.result,{type:'array',cellDates:true,raw:false});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      (ws['!merges']||[]).forEach(function(m){
+        var bk=XLSX.utils.encode_cell({r:m.s.r,c:m.s.c});
+        var val=ws[bk]?ws[bk].v:'';
+        for(var r=m.s.r;r<=m.e.r;r++)for(var c=m.s.c;c<=m.e.c;c++){
+          var addr=XLSX.utils.encode_cell({r:r,c:c});
+          if(!ws[addr])ws[addr]={v:val,t:'s'};
+        }
+      });
+      var json=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+      if(document.getElementById('showDebug').checked)
+        document.getElementById('debugRaw').textContent='[ 원본 15행 ]\n'+JSON.stringify(json.slice(0,15),null,2);
+      // 년월 자동 추출 (0앞에 붙은 형태도 처리)
+      for(var i=0;i<Math.min(10,json.length);i++){
+        var m2=json[i].join(' ').match(/(\d{4})년\s*0?(\d{1,2})월/);
+        if(m2){
+          if(!document.getElementById('yearMonth').value)
+            document.getElementById('yearMonth').value=m2[1]+'년 '+m2[2]+'월';
+          break;
+        }
+      }
+      parsedWeeks=buildCalendar(json);
+      document.getElementById('pdfBtn').disabled=false;
+      document.getElementById('preview').style.display='block';
+      document.getElementById('msg').style.display='none';
+      if(parsedWeeks&&parsedWeeks.length){
+        render();
+      }
+    }catch(err){
+      alert('파일 읽기 오류: '+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+document.getElementById('showDebug').addEventListener('change',function(e){
+  document.getElementById('debugRaw').style.display=e.target.checked?'block':'none';
+});
+
+function buildCalendar(json){
+  var ymStr=document.getElementById('yearMonth').value;
+  var ymMatch=ymStr.match(/(\d{4})년\s*0?(\d{1,2})월/);
+  if(!ymMatch){alert('년월을 입력해 주세요!');return[];}
+  var year=parseInt(ymMatch[1]),month=parseInt(ymMatch[2]);
+
+  // 달력 생성: 1일~말일, 월~금만
+  var weeks=[];
+  var daysInMonth=new Date(year,month,0).getDate();
+  var curWeek=null;
+  for(var day=1;day<=daysInMonth;day++){
+    var dow=new Date(year,month-1,day).getDay();
+    if(dow===0||dow===6)continue;
+    var col=dow-1;
+    if(col===0||curWeek===null){
+      if(curWeek)weeks.push(curWeek);
+      curWeek={dates:[null,null,null,null,null],menus:['','','','','']};
+    }
+    curWeek.dates[col]=day;
+  }
+  if(curWeek)weeks.push(curWeek);
+
+  // 엑셀에서 날짜별 메뉴 추출
+  var menuByDate=extractMenus(json);
+
+  // 달력에 메뉴 매칭
+  weeks.forEach(function(w){
+    w.dates.forEach(function(date,col){
+      if(date!==null&&menuByDate[date]!==undefined)
+        w.menus[col]=menuByDate[date];
+    });
+  });
+  return weeks;
+}
+
+function extractMenus(json){
+  var result={},prevMax=0,colDayMap={};
+  for(var ri=0;ri<Math.min(20,json.length);ri++){
+    var txt=json[ri].join('');
+    if(txt.indexOf('월요일')>=0&&txt.indexOf('화요일')>=0){
+      var dn=['월요일','화요일','수요일','목요일','금요일'];
+      json[ri].forEach(function(c,ci){var di=dn.indexOf(String(c).trim());if(di>=0)colDayMap[ci]=di;});
+      break;
+    }
+  }
+  var i=0;
+  while(i<json.length){
+    var row=json[i].map(function(c){return String(c).trim();});
+    var nums=row.map(function(c){return parseInt(c);}).filter(function(n){return!isNaN(n)&&n>=1&&n<=31;});
+    if(nums.length>=2){
+      var seen={},datePos=[];
+      row.forEach(function(c,idx){
+        var n=parseInt(c);
+        if(!isNaN(n)&&n>=1&&n<=31&&!seen[n]){seen[n]=true;datePos.push({idx:idx,date:n});}
+      });
+      var mn=Math.min.apply(null,datePos.map(function(p){return p.date;}));
+      if(prevMax>20&&mn<=5){i++;continue;}
+      prevMax=Math.max.apply(null,datePos.map(function(p){return p.date;}));
+      var tmp={};
+      datePos.forEach(function(p){tmp[p.date]='';});
+      var j=i+1;
+      while(j<json.length){
+        var mr=json[j].map(function(c){return String(c).trim();});
+        if(mr.map(function(c){return parseInt(c);}).filter(function(n){return!isNaN(n)&&n>=1&&n<=31;}).length>=2)break;
+        datePos.forEach(function(p){
+          var cell=mr[p.idx]||'';
+          if(!cell&&p.idx+1<mr.length)cell=mr[p.idx+1]||'';
+          cell=cell.trim();
+          var skip=['중식','조식','석식','◇','*원산지','합계'],bad=false;
+          skip.forEach(function(s){if(cell.indexOf(s)===0)bad=true;});
+          if(cell&&!bad)tmp[p.date]=tmp[p.date]?tmp[p.date]+'\n'+cell:cell;
+        });
+        j++;
+      }
+      Object.keys(tmp).forEach(function(d){result[parseInt(d)]=tmp[d];});
+      i=j;
+    }else i++;
+  }
+  return result;
+}
+
+function render(){
+  if(!parsedWeeks.length)return;
+  var ORIGIN=document.getElementById('originText').value;
+  var ALLERGY=document.getElementById('allergyText').value;
+  var showA=document.getElementById('showAllergy').checked;
+  var showN=document.getElementById('showNutrition').checked;
+  var ym=document.getElementById('yearMonth').value;
+  document.getElementById('prevTitle').textContent=ym.replace(/\d{4}년\s*/,'')+' 교육급식 식단';
+
+  // 앞칸: 첫 주에서 날짜가 null인 칸만 카운트
+  // 날짜가 있으면 메뉴 없어도 빈칸으로 세지 않음
+  var W0=parsedWeeks[0];
+  var frontSpan=0;
+  for(var c=0;c<5;c++){
+    if(W0.dates[c]===null)frontSpan++;
+    else break;
+  }
+
+  // 뒷칸: 마지막 주에서 메뉴+이벤트 없는 뒤쪽 칸 수 (날짜가 있어도 메뉴 없으면 포함)
+  var WL=parsedWeeks[parsedWeeks.length-1];
+  var backSpan=0;
+  for(var c=4;c>=0;c--){
+    var dL=WL.dates[c];
+    if(dL===null){backSpan++;continue;}
+    var hasMenuL=(WL.menus[c]||'').trim()!=='';
+    var hasEvtL=!!EVENTS[dL];
+    if(!hasMenuL&&!hasEvtL){backSpan++;}
+    else break;
+  }
+
+  document.getElementById('debugInfo').textContent='앞칸:'+frontSpan+'개 / 뒷칸:'+backSpan+'개';
+
+  // ── 원산지/알레르기 배치 결정 (재설계) ──
+  // 우선순위: 큰 칸에 origin, 작은 칸에 allergy. 3칸 이상이면 both.
+  var frontType=null,backType=null,extraOrigin=false,extraAllergy=false;
+
+  function decideSlot(span){
+    if(span>=3)return 'both';
+    if(span===2)return 'origin';
+    if(span===1)return 'allergy';
+    return null;
+  }
+  var frontDecision=decideSlot(frontSpan);
+  var backDecision=decideSlot(backSpan);
+
+  // 둘 다 있는 경우 충돌 처리
+  if(frontDecision==='both'){
+    frontType='both';
+    if(backDecision==='allergy')backType=null; // 이미 both에 포함
+    else if(backDecision==='origin')backType=null;
+  }else if(backDecision==='both'){
+    backType='both';
+  }else if(frontDecision==='origin'&&backDecision==='origin'){
+    // 둘다 2칸: 앞에 origin, 뒤에 allergy
+    frontType='origin';backType='allergy';
+  }else if(frontDecision==='origin'&&backDecision==='allergy'){
+    frontType='origin';backType='allergy';
+  }else if(frontDecision==='allergy'&&backDecision==='origin'){
+    frontType='allergy';backType='origin';
+  }else if(frontDecision==='origin'){
+    frontType='origin';
+    extraAllergy=true; // 뒤에 자리 없음
+  }else if(backDecision==='origin'){
+    backType='origin';
+    extraAllergy=true;
+  }else if(frontDecision==='allergy'&&backDecision==='allergy'){
+    frontType='allergy'; // 한쪽만 사용
+    extraOrigin=true;
+  }else if(frontDecision==='allergy'){
+    frontType='allergy';
+    extraOrigin=true;
+  }else if(backDecision==='allergy'){
+    backType='allergy';
+    extraOrigin=true;
+  }else{
+    extraOrigin=true;extraAllergy=true;
+  }
+
+  function getContent(type){
+    if(type==='origin')return ORIGIN;
+    if(type==='allergy')return ALLERGY;
+    return ORIGIN+'\n\n'+ALLERGY;
+  }
+  function buildInfoHtml(text){
+    var secs=text.split('\n\n'),html='';
+    secs.forEach(function(sec,si){
+      sec.split('\n').forEach(function(l,i){html+=i===0?'<b>'+l+'</b><br>':'<span style="word-break:keep-all">'+l+'</span>';});
+      if(si<secs.length-1)html+='<br>';
+    });
+    return html;
+  }
+  function mTh(span,lbl){var th=document.createElement('th');th.colSpan=span;th.className='th-info';th.textContent=lbl;return th;}
+  function mTd(span,html,cls){var td=document.createElement('td');td.colSpan=span;td.className=cls||'';td.innerHTML=html;return td;}
+
+  var DAYS=['월','화','수','목','금'];
+  var DCLS=['th-mon','th-tue','th-wed','th-thu','th-fri'];
+  var body=document.getElementById('mealBody');
+  body.innerHTML='';
+
+  parsedWeeks.forEach(function(week,wi){
+    var isFirst=wi===0,isLast=wi===parsedWeeks.length-1;
+    var myFront=isFirst&&frontSpan>0&&frontType?frontSpan:0;
+    var myBack=isLast&&backSpan>0&&backType?backSpan:0;
+    var myBackStart=5-myBack;
+
+    // 헤더행
+    var hr=document.createElement('tr');
+    for(var c=0;c<5;){
+      if(myFront>0&&c===0){
+        var lbl=frontType==='both'?'◇ 원산지·알레르기':frontType==='origin'?'◇ 식재료 원산지 안내':'◇ 알레르기 정보';
+        hr.appendChild(mTh(myFront,lbl));c+=myFront;
+      }else if(myBack>0&&c===myBackStart){
+        var lbl=backType==='both'?'◇ 원산지·알레르기':backType==='origin'?'◇ 식재료 원산지 안내':'◇ 알레르기 정보';
+        hr.appendChild(mTh(myBack,lbl));c+=myBack;
+      }else{
+        var date=week.dates[c];
+        var evt=date&&EVENTS[date]?EVENTS[date]:null;
+        var label=date?date+'일('+DAYS[c]+')':'';
+        if(evt&&evt.type==='special')label+=' '+evt.icon+evt.title;
+        var th=document.createElement('th');th.className=DCLS[c];th.textContent=label;
+        if(!date)th.style.color='#ddd';
+        hr.appendChild(th);c++;
+      }
+    }
+    body.appendChild(hr);
+
+    // 메뉴행
+    var mr=document.createElement('tr');
+    for(var c=0;c<5;){
+      if(myFront>0&&c===0){
+        mr.appendChild(mTd(myFront,buildInfoHtml(getContent(frontType)),'td-info'));c+=myFront;
+      }else if(myBack>0&&c===myBackStart){
+        mr.appendChild(mTd(myBack,buildInfoHtml(getContent(backType)),'td-info'));c+=myBack;
+      }else{
+        var date=week.dates[c];
+        var raw=(week.menus[c]||'').trim();
+        var ev=date&&EVENTS[date]?EVENTS[date]:null;
+        var td=document.createElement('td');
+        if(ev&&ev.type==='noMeal'){
+          td.innerHTML='<div class="event-card"><span class="event-icon">'+ev.icon+'</span><span class="event-title">'+ev.title+'</span><span class="event-sub">급식 없음</span></div>';
+        }else if(!raw){
+          td.className='td-empty';td.textContent=date?'—':'';
+        }else{
+          td.innerHTML=fmtMenu(raw,showA,showN);
+        }
+        mr.appendChild(td);c++;
+      }
+    }
+    body.appendChild(mr);
+  });
+
+  // extraTable
+  var extBody=document.getElementById('extraBody');
+  extBody.innerHTML='';
+  var extTable=document.getElementById('extraTable');
+  if(extraOrigin||extraAllergy){
+    extTable.style.display='';
+    if(extraOrigin&&extraAllergy){
+      var hr1=document.createElement('tr');
+      hr1.appendChild(mTh(3,'◇ 식재료 원산지 안내'));
+      hr1.appendChild(mTh(2,'◇ 알레르기 정보'));
+      extBody.appendChild(hr1);
+      var dr1=document.createElement('tr');
+      dr1.appendChild(mTd(3,buildInfoHtml(ORIGIN),'td-info'));
+      dr1.appendChild(mTd(2,buildInfoHtml(ALLERGY),'td-info'));
+      extBody.appendChild(dr1);
+    }else if(extraOrigin){
+      var hr1=document.createElement('tr');hr1.appendChild(mTh(5,'◇ 식재료 원산지 안내'));extBody.appendChild(hr1);
+      var dr1=document.createElement('tr');dr1.appendChild(mTd(5,buildInfoHtml(ORIGIN),'td-info'));extBody.appendChild(dr1);
+    }else{
+      var hr1=document.createElement('tr');hr1.appendChild(mTh(5,'◇ 알레르기 정보'));extBody.appendChild(hr1);
+      var dr1=document.createElement('tr');dr1.appendChild(mTd(5,buildInfoHtml(ALLERGY),'td-info'));extBody.appendChild(dr1);
+    }
+  }else{
+    extTable.style.display='none';
+  }
+}
+
+function fmtMenu(raw,showA,showN){
+  var lines=raw.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var html='';
+  lines.forEach(function(line){
+    if(line.match(/^[\*\s]*에너지/)){
+      if(showN)html+='<div class="nutrition">'+line.replace(/^\*/,'').trim()+'</div>';
+      return;
+    }
+    var m=line.match(/^(.+?)\(([0-9]+(?:\.[0-9]+)*)\)(.*)$/);
+    if(m){
+      if(showA)html+='<span class="menu-name"><span class="menu-text">'+m[1].trim()+m[3]+'</span><span class="allergy-num">('+m[2]+')</span></span>';
+      else html+='<span class="menu-name"><span class="menu-text">'+m[1].trim()+m[3]+'</span></span>';
+    }else{
+      html+='<span class="menu-name"><span class="menu-text">'+line+'</span></span>';
+    }
+  });
+  return html;
+}
+
+function resetAll(){
+  parsedWeeks=[];
+  document.getElementById('fileInput').value='';
+  document.getElementById('preview').style.display='none';
+  document.getElementById('msg').style.display='block';
+  document.getElementById('pdfBtn').disabled=true;
+  document.getElementById('yearMonth').value='';
+  document.getElementById('debugInfo').textContent='';
+  document.getElementById('debugRaw').textContent='';
+  document.getElementById('mealBody').innerHTML='';
+  document.getElementById('extraBody').innerHTML='';
+  document.getElementById('extraTable').style.display='none';
+}
+
+['showAllergy','showNutrition'].forEach(function(id){
+  document.getElementById(id).addEventListener('change',function(){if(parsedWeeks.length)render();});
+});
+document.getElementById('yearMonth').addEventListener('input',function(){
+  if(parsedWeeks.length)render();
+});
+</script>
+</body>
+</html>
